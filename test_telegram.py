@@ -1,6 +1,9 @@
 from config import *
-import telebot
 import threading
+import telebot
+
+from telebot.types import InlineKeyboardMarkup
+from telebot.types import InlineKeyboardButton
 
 ### DEFINES ################################
 DIAS_SEMANA = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo']
@@ -9,8 +12,6 @@ EMOJIS_NUMEROS = ['1️⃣','2️⃣','3️⃣','4️⃣','5️⃣','6️⃣','7
 ### VARIABLES ##############################
 bot = telebot.TeleBot(BOT_TOKEN)
 lista_semanal = {}
-lista_socios = []
-lista_admins = []
 lista_negra = []
 lista_dolorosa = {} # Para el futuro
 max_miembros_diarios = 7
@@ -26,6 +27,25 @@ def PlazasLibres(dia):
     if dia in lista_semanal:
         return max_miembros_diarios - len(lista_semanal[dia])
     return 0
+
+def AñadirReserva(dia, username, chatId, messageId):
+    if PlazasLibres(dia) == 0:
+        # Añadir notificacion de error
+        return False
+    lista_semanal[dia].append(username)
+    bot.edit_message_text(chatId, messageId, ImprimirLista())
+    return True
+
+def QuitarReserva(dia, username, chatId, messageId):
+
+    if username in lista_semanal[dia] is None:
+        # Añadir notificacion de error
+        return False
+    lista_semanal[dia].reverse()
+    lista_semanal[dia].remove(username)
+    lista_semanal[dia].reverse()
+    bot.edit_message_text(chatId, messageId, ImprimirLista())
+    return True
 
 def ImprimirLista():
     message = '[Texto de ejemplo lol]\n'
@@ -50,10 +70,37 @@ def ImprimirLista():
 
     return message
 
+def CheckEsMiembro(username):
+    return username in LISTA_SOCIOS is None
+
+def CheckEsSocio(username):
+    return username in LISTA_SOCIOS is not None
+
+def CheckEsAdmin(username):
+    return username in LISTA_ADMINS is not None
+
+def ArrobaUser(username):
+    return '@' + username
+
 ### TELEGRAM ###############################
 @bot.message_handler(commands=['lista'])
 def on_command(message):
-    bot.reply_to(message, ImprimirLista())
+    markup = InlineKeyboardMarkup()
+    addButton = InlineKeyboardButton('Añadir reserva', callback_data='añadir reserva')
+    removeButton = InlineKeyboardButton('Quitar reserva', callback_data='quitar reserva')
+    markup.add(addButton, removeButton)
+    bot.reply_to(message, ImprimirLista(), reply_markup=markup)
+
+@bot.callback_query_handler(func = lambda x: True)
+def respuesta_botones_reserva(call):
+    username = call.from_user.username
+    messageId = call.message.id
+    chatId = call.message.chat.id
+    
+    if call.data == 'añadir reserva':
+        AñadirReserva(DIAS_SEMANA[5], username, chatId, messageId)
+    if call.data == 'quitar reserva':
+        QuitarReserva(DIAS_SEMANA[5], username, chatId, messageId)
 
 def recibir_mensajes():
     bot.infinity_polling()
